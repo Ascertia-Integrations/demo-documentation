@@ -16,8 +16,8 @@
     "sync-version": "docusaurus-sync-version"
   },
   "dependencies": {
-    "@ascertia-integrations/docusaurus-preset-docs": "file:../docusaurus-github-pages-poc/packages/docusaurus-preset-docs",
-    "@ascertia-integrations/docusaurus-version-sync": "file:../docusaurus-github-pages-poc/packages/docusaurus-version-sync",
+    "@ascertia-integrations/docusaurus-preset-docs": "^0.1.0",
+    "@ascertia-integrations/docusaurus-version-sync": "^0.1.0",
     "@docusaurus/core": "3.10.0",
     "@docusaurus/faster": "3.10.0",
     "@docusaurus/preset-classic": "3.10.0",

@@ -1,13 +1,19 @@
-# Demo Documentation (Consumer Repo)
+# Demo Documentation (Consumer Repo Template)
 
 This repository is a sample **consumer documentation repo** that uses the shared Docs Platform tooling.
+
+## Use this as a template
+
+- Create a new repo from this template.
+- Update `docusaurus.config.ts` (title, logo, and any product-specific navbar/footer items).
+- Add a repo (or org) secret named `DOCS_PLATFORM_NPM_TOKEN` containing a PAT with `read:packages` so CI can install the platform packages from GitHub Packages.
 
 ## What this repo implements
 
 - Docusaurus site at the repo root (`docs/`, `docusaurus.config.ts`, `sidebars.ts`).
 - Shared preset/theme: `@ascertia-integrations/docusaurus-preset-docs`.
 - Version sync CLI: `@ascertia-integrations/docusaurus-version-sync` (bin: `docusaurus-sync-version`).
-- GitHub Pages deployment via the reusable workflow in the platform repo: `.github/workflows/deploy-docs.yml`.
+- GitHub Pages deployment via the platform reusable workflow: `.github/workflows/deploy-docs.yml`.
 
 ## Local development
 
@@ -33,5 +39,4 @@ npm run sync-version -- 1.0.0 --allow-dirty
 
 ## Notes
 
-- This demo currently uses `file:` dependencies pointing to a local checkout of the platform repo. Replace those with published versions once the platform packages are released to GitHub Packages.
 - `docusaurus.config.ts` reads `SITE_URL` and `BASE_URL` (set by CI) so GitHub Pages deployments don’t require hardcoding.
