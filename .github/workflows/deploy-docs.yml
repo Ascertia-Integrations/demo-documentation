@@ -1,0 +1,14 @@
+name: deploy-docs
+on:
+  push:
+    branches:
+      - main
+      - "*.*.*"
+
+jobs:
+  deploy:
+    uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@main
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
