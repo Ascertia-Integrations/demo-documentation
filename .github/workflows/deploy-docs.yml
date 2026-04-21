@@ -1,5 +1,6 @@
 name: deploy-docs
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -13,3 +14,4 @@ jobs:
       contents: write
       pages: write
       id-token: write
+      packages: read
