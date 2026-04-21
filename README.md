@@ -6,7 +6,7 @@ This repository is a sample **consumer documentation repo** that uses the shared
 
 - Create a new repo from this template.
 - Update `docusaurus.config.ts` (title, logo, and any product-specific navbar/footer items).
-- Add a repo (or org) secret named `DOCS_PLATFORM_NPM_TOKEN` containing a PAT with `read:packages` so CI can install the platform packages from GitHub Packages.
+- Add a repo (or org) secret named `DOCS_PLATFORM_NPM_TOKEN` containing a PAT with `read:packages` (and usually `repo` for private packages) so CI can install the platform packages from GitHub Packages.
 
 ## What this repo implements
 
