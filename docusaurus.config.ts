@@ -28,7 +28,7 @@ const config: Config = {
   organizationName,
   projectName,
 
-  onBrokenLinks: 'warn',
+  onBrokenLinks: 'throw',
   onBrokenAnchors: 'warn',
 
   i18n: {
@@ -42,6 +42,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          routeBasePath: '/',
         },
         blog: {
           showReadingTime: true,
