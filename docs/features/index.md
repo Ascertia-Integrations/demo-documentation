@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: MDX Examples
+slug: /
 ---
 
 This page demonstrates a few common MDX features.

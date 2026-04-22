@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Version Sync CLI
+slug: /
 ---
 
 The platform provides a CLI that turns a release branch (`X.Y.Z`) into a Docusaurus version.

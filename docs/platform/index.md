@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Platform Overview
+slug: /
 ---
 
 This consumer repo follows the **branch-driven versioning** model:

@@ -17,10 +17,18 @@ This repository is a sample **consumer documentation repo** that uses the shared
 
 ## Local development
 
-```bash
-npm install
-npm start
-```
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Start the development server:**
+   ```bash
+   npm start
+   ```
+
+3. **View the site:**
+   Once the server starts, it will be available at **[http://localhost:3000](http://localhost:3000)**. The site will automatically reload whenever you save changes to your documentation or configuration.
 
 ## Versioning model (branches → Docusaurus versions)
 
