@@ -41,16 +41,10 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          editUrl: `https://github.com/${organizationName}/${projectName}/tree/main/`,
           routeBasePath: '/',
         },
         blog: {
           showReadingTime: true,
-          feedOptions: {
-            type: ['rss', 'atom'],
-            xslt: true,
-          },
-          editUrl: `https://github.com/${organizationName}/${projectName}/tree/main/`,
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
           onUntruncatedBlogPosts: 'warn',
@@ -58,7 +52,7 @@ const config: Config = {
         theme: {
           customCss: './src/css/custom.css',
         },
-      } satisfies Preset.Options,
+      },
     ],
   ],
 
@@ -74,19 +68,7 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
-          position: 'left',
-          label: 'Tutorial',
-        },
-        {to: '/blog', label: 'Blog', position: 'left'},
         {type: 'docsVersionDropdown', position: 'right'},
-        {
-          href: `https://github.com/${organizationName}/${projectName}`,
-          label: 'GitHub',
-          position: 'right',
-        },
       ],
     },
 

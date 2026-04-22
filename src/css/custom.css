@@ -12,6 +12,71 @@
 :root {
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  
+  /* Primary Color System: #085DFE */
+  --ifm-color-primary: #085DFE;
+  --ifm-color-primary-dark: #0754e5;
+  --ifm-color-primary-darker: #074fd8;
+  --ifm-color-primary-darkest: #0641b2;
+  --ifm-color-primary-light: #216eff;
+  --ifm-color-primary-lighter: #2e77ff;
+  --ifm-color-primary-lightest: #5591ff;
+
+  /* Navbar */
+  --ifm-navbar-background-color: #FFFFFF;
+  --ifm-navbar-link-color: #1C1D20;
+  --ifm-navbar-shadow: none;
+
+  /* Sidebar */
+  --ifm-menu-color: #757678;
+  --ifm-menu-color-active: #085DFE;
+  --ifm-menu-item-background-active: transparent;
+  --ifm-menu-item-background-hover: rgba(8, 93, 254, 0.05);
+
+  /* Breadcrumbs */
+  --ifm-breadcrumb-item-color-active: #085DFE;
+}
+
+/* Navbar bottom line */
+.navbar {
+  border-bottom: 1px solid #EFEFEF;
+}
+
+.navbar__title {
+  color: #1C1D20;
+}
+
+/* Sidebar background */
+.theme-doc-sidebar-container {
+  background-color: #F9FAFC !important;
+  border-right: 1px solid #EFEFEF;
+}
+
+.menu__link {
+  font-size: 14px;
+  font-weight: 400;
+  color: #757678;
+}
+
+.menu__link,
+.menu__link:hover,
+.menu__link--active {
+  background-color: transparent !important;
+}
+
+.menu__link--active {
+  color: #085DFE !important;
+  font-weight: 400;
+}
+
+.menu__caret {
+  transform: scale(0.7);
+  background-color: transparent !important;
+}
+
+[class*='docItemCol'] {
+  padding-left: 3.5rem !important;
+  padding-right: 3.5rem !important;
 }
 
 [data-theme='dark'] {

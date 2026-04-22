@@ -1,7 +1,6 @@
 ---
 sidebar_position: 1
 title: Sections & Sub-pages
-slug: /
 ---
 
 Docusaurus can generate sidebar structure from the filesystem. A typical pattern is:

@@ -1,7 +1,6 @@
 ---
 sidebar_position: 1
 title: Demo Overview
-slug: /
 ---
 
 This section is a **navigation demo** showing:

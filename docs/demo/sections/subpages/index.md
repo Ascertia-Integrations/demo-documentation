@@ -1,7 +1,6 @@
 ---
 sidebar_position: 1
 title: Child Page
-slug: /
 ---
 
 This is a nested sub-page.
