@@ -8,7 +8,7 @@ on:
 
 jobs:
   deploy:
-    uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@v0.1.2
+    uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@main
     secrets: inherit
     with:
       # Use `npm ci` once package-lock.json is stabilized for this repo.
