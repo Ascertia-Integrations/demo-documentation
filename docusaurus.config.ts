@@ -44,12 +44,6 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
         },
-        blog: {
-          showReadingTime: true,
-          onInlineTags: 'warn',
-          onInlineAuthors: 'warn',
-          onUntruncatedBlogPosts: 'warn',
-        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -68,9 +62,6 @@ const config: Config = {
         alt: 'Demo Logo',
         src: 'img/logo.svg',
       },
-      items: [
-        {type: 'docsVersionDropdown', position: 'right'},
-      ],
     },
 
     prism: {
