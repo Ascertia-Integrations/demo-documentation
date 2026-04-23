@@ -169,17 +169,6 @@ commit_branch_import_if_needed() {
   log INFO "Committed imported docs on target branch $version_branch"
 }
 
-restore_git_ref() {
-  local repo_path="$1"
-  local ref="$2"
-
-  if git -C "$repo_path" show-ref --verify --quiet "refs/heads/$ref"; then
-    git -C "$repo_path" switch "$ref"
-  else
-    git -C "$repo_path" switch --detach "$ref"
-  fi
-}
-
 discover_version_source_refs() {
   git -C "$source_dir" for-each-ref --format='%(refname)' refs/heads refs/remotes \
     | awk -F/ '
@@ -247,6 +236,19 @@ prune_stale_target_version_branches() {
   done < <(discover_target_version_branches)
 }
 
+run_import_in_isolated_worktree() {
+  local worktree_path="$1"
+  local source_path="$2"
+  local docs_path="$3"
+  shift 3
+  local import_args=("$@")
+
+  GITBOOK_IMPORT_SKIP_BRANCH_VERSION_MIGRATION=1 \
+  GITBOOK_IMPORT_SUPPRESS_VERSION_WARNINGS=1 \
+  GITBOOK_IMPORT_LOG_LEVEL="$LOG_LEVEL" \
+  bash "$0" "${import_args[@]}" "$source_path" "$docs_path"
+}
+
 if [[ "$migrate_version_branches" -eq 1 && "$SKIP_BRANCH_VERSION_MIGRATION" -eq 0 ]]; then
   if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     log ERROR "--migrate-version-branches requires the source directory to be a git repository"
@@ -262,7 +264,6 @@ if [[ "$migrate_version_branches" -eq 1 && "$SKIP_BRANCH_VERSION_MIGRATION" -eq 
 
   original_target_ref="$(git -C "$target_site_root" symbolic-ref --quiet --short HEAD || git -C "$target_site_root" rev-parse HEAD)"
   target_docs_rel_path="${target_docs_dir#"$target_site_root"/}"
-  target_static_gitbook_rel_path="${target_static_gitbook_dir#"$target_site_root"/}"
 
   version_branches=()
   version_source_refs=()
@@ -283,13 +284,14 @@ if [[ "$migrate_version_branches" -eq 1 && "$SKIP_BRANCH_VERSION_MIGRATION" -eq 
       version_source_ref="${version_source_refs[$index]}"
       log INFO "Processing source branch $version_branch from $version_source_ref"
       branch_export_dir="$(mktemp -d /tmp/gitbook-branch-export.XXXXXX)"
+      branch_worktree_dir="$(mktemp -d /tmp/gitbook-target-worktree.XXXXXX)"
 
       git -C "$source_dir" archive "$version_source_ref" | tar -x -C "$branch_export_dir"
 
       if git -C "$target_site_root" show-ref --verify --quiet "refs/heads/$version_branch"; then
-        git -C "$target_site_root" switch "$version_branch"
+        git -C "$target_site_root" worktree add "$branch_worktree_dir" "$version_branch"
       else
-        git -C "$target_site_root" switch -c "$version_branch"
+        git -C "$target_site_root" worktree add -b "$version_branch" "$branch_worktree_dir" "$original_target_ref"
       fi
 
       import_branch_args=(--force-clean)
@@ -297,21 +299,40 @@ if [[ "$migrate_version_branches" -eq 1 && "$SKIP_BRANCH_VERSION_MIGRATION" -eq 
         import_branch_args+=(--reset-versioned-docs)
       fi
 
-      GITBOOK_IMPORT_SKIP_BRANCH_VERSION_MIGRATION=1 \
-      GITBOOK_IMPORT_SUPPRESS_VERSION_WARNINGS=1 \
-      GITBOOK_IMPORT_LOG_LEVEL="$LOG_LEVEL" \
-      bash "$0" "${import_branch_args[@]}" "$branch_export_dir" "$target_docs_dir"
+      run_import_in_isolated_worktree \
+        "$branch_worktree_dir" \
+        "$branch_export_dir" \
+        "$branch_worktree_dir/$target_docs_rel_path" \
+        "${import_branch_args[@]}"
 
       commit_branch_import_if_needed \
-        "$target_site_root" \
+        "$branch_worktree_dir" \
         "$version_branch"
 
+      git -C "$target_site_root" worktree remove --force "$branch_worktree_dir"
       rm -rf "$branch_export_dir"
     done
 
-    restore_git_ref "$target_site_root" "$original_target_ref"
     log INFO "Completed target branch replication for source version branches"
   fi
+
+  current_import_worktree_dir="$(mktemp -d /tmp/gitbook-current-worktree.XXXXXX)"
+  git -C "$target_site_root" worktree add --detach "$current_import_worktree_dir" "$original_target_ref"
+
+  current_import_args=(--force-clean)
+  if [[ "$reset_versioned_docs" -eq 1 ]]; then
+    current_import_args+=(--reset-versioned-docs)
+  fi
+
+  run_import_in_isolated_worktree \
+    "$current_import_worktree_dir" \
+    "$source_dir" \
+    "$current_import_worktree_dir/$target_docs_rel_path" \
+    "${current_import_args[@]}"
+
+  git -C "$target_site_root" worktree remove --force "$current_import_worktree_dir"
+  log INFO "Imported current docs in an isolated worktree and discarded them, leaving the checked-out target branch clean"
+  exit 0
 fi
 
 if find "$target_docs_dir" -mindepth 1 -maxdepth 1 | read -r _; then
