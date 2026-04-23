@@ -139,13 +139,21 @@ Reduce output to warnings and errors only:
 bash ./scripts/import-gitbook.sh --quiet --force-clean ../legacy-gitbook ./docs
 ```
 
+Import current docs and local release branches named `X.Y.Z` into matching target repository branches:
+
+```bash
+bash ./scripts/import-gitbook.sh --force-clean --reset-versioned-docs --migrate-version-branches ../legacy-gitbook ./docs
+```
+
 What the importer handles:
 
 - `.gitbook.yaml` `root`, `readme`, and `summary` settings
-- GitBook-managed uploaded images from `.gitbook/assets/`, copied into `docs/assets/gitbook/`
+- GitBook-managed uploaded images from `.gitbook/assets/`, copied into `static/img/gitbook/`
 - `README.md` or `README.mdx` section landing pages, converted to `index.md` or `index.mdx`
 - `SUMMARY.md` ordering and labels, converted into Docusaurus sidebar metadata
 - optional cleanup of stale `versions.json`, `versioned_docs/`, and `versioned_sidebars/`
+- optional migration of source git branches named `X.Y.Z` into matching target repo branches with one local commit per branch
+- automatic pruning of stale target release branches that are not present in the source release branch set
 - relative Markdown links between imported docs
 - rewritten Markdown image and link references that point at `.gitbook/assets/...`
 - copied assets alongside the imported content
@@ -162,7 +170,7 @@ What the logs show:
 - generated `_category_.json` files
 - final import counts
 
-Practical rule: for a first migration into a starter Docusaurus repo, prefer `--force-clean --reset-versioned-docs` so old starter pages do not keep showing through versioned artifacts. After that, review the generated docs for any GitBook-specific embeds or formatting that still need manual cleanup.
+Practical rule: for a first migration into a starter Docusaurus repo, prefer `--force-clean --reset-versioned-docs` so old starter pages do not keep showing through versioned artifacts. Add `--migrate-version-branches` if the source repo also has release branches you want replicated into matching target repo branches in the same run. That mode checks both local and remote-tracking source branches named `X.Y.Z`, prefers a local branch when both exist, prunes stale target release branches that are no longer present in the source set, switches target branches, and creates local commits, so start from a clean target worktree. If you need the latest remote branch list, run `git fetch --prune` in the source repo first. After that, review the generated docs for any GitBook-specific embeds or formatting that still need manual cleanup.
 
 Reference:
 

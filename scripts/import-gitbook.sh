@@ -3,6 +3,9 @@
 set -euo pipefail
 
 LOG_LEVEL="${GITBOOK_IMPORT_LOG_LEVEL:-INFO}"
+ASSET_PUBLIC_PREFIX="${GITBOOK_IMPORT_ASSET_PUBLIC_PREFIX:-/img/gitbook}"
+SKIP_BRANCH_VERSION_MIGRATION="${GITBOOK_IMPORT_SKIP_BRANCH_VERSION_MIGRATION:-0}"
+SUPPRESS_VERSION_WARNINGS="${GITBOOK_IMPORT_SUPPRESS_VERSION_WARNINGS:-0}"
 
 log_level_rank() {
   case "$1" in
@@ -26,6 +29,7 @@ log() {
 usage() {
   cat <<'EOF'
 Usage: ./scripts/import-gitbook.sh [--force-clean] [--reset-versioned-docs] [--verbose|--quiet] <gitbook-source-dir> [target-docs-dir]
+       ./scripts/import-gitbook.sh [--force-clean] [--reset-versioned-docs] [--migrate-version-branches] [--verbose|--quiet] <gitbook-source-dir> [target-docs-dir]
 
 Imports a GitBook-style Markdown tree into the Docusaurus docs architecture used by this repo.
 
@@ -44,6 +48,7 @@ Logging:
 Versioned docs:
 - --reset-versioned-docs: remove versions.json, versioned_docs/, and versioned_sidebars/
 - recommended for first-time migrations from a starter template repo
+- --migrate-version-branches: mirror source git branches matching X.Y.Z into matching target repo branches, prune stale target release branches, import docs there, and create a local commit per branch
 
 Examples:
   ./scripts/import-gitbook.sh ../legacy-gitbook
@@ -51,11 +56,13 @@ Examples:
   ./scripts/import-gitbook.sh --quiet ../legacy-gitbook
   ./scripts/import-gitbook.sh --force-clean ../legacy-gitbook ./docs
   ./scripts/import-gitbook.sh --force-clean --reset-versioned-docs ../legacy-gitbook ./docs
+  ./scripts/import-gitbook.sh --force-clean --reset-versioned-docs --migrate-version-branches ../legacy-gitbook ./docs
 EOF
 }
 
 force_clean=0
 reset_versioned_docs=0
+migrate_version_branches=0
 source_dir=""
 target_docs_dir=""
 
@@ -67,6 +74,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --reset-versioned-docs)
       reset_versioned_docs=1
+      shift
+      ;;
+    --migrate-version-branches)
+      migrate_version_branches=1
       shift
       ;;
     --verbose)
@@ -124,14 +135,183 @@ target_site_root="$(cd "$target_docs_dir/.." && pwd)"
 versions_file="$target_site_root/versions.json"
 versioned_docs_dir="$target_site_root/versioned_docs"
 versioned_sidebars_dir="$target_site_root/versioned_sidebars"
-target_static_gitbook_dir="$target_site_root/static/img/gitbook"
+target_static_gitbook_dir="${GITBOOK_IMPORT_TARGET_STATIC_GITBOOK_DIR:-$target_site_root/static/img/gitbook}"
 log INFO "Resolved target docs directory: $target_docs_dir"
 log INFO "Resolved site root directory: $target_site_root"
 log INFO "Using log level: $LOG_LEVEL"
+log INFO "Using asset public prefix: $ASSET_PUBLIC_PREFIX"
 
 if [[ "$target_docs_dir" == "/" ]]; then
   echo "Refusing to import into /" >&2
   exit 1
+fi
+
+require_clean_git_worktree() {
+  local repo_path="$1"
+  if [[ -n "$(git -C "$repo_path" status --porcelain)" ]]; then
+    log ERROR "Target repository has uncommitted changes; branch migration requires a clean worktree"
+    log ERROR "Commit or stash changes in $repo_path, then re-run with --migrate-version-branches"
+    exit 1
+  fi
+}
+
+commit_branch_import_if_needed() {
+  local repo_path="$1"
+  local version_branch="$2"
+  git -C "$repo_path" add -A -- .
+
+  if git -C "$repo_path" diff --cached --quiet --exit-code; then
+    log INFO "No branch changes to commit for $version_branch"
+    return
+  fi
+
+  git -C "$repo_path" commit -m "chore(docs): import GitBook branch $version_branch"
+  log INFO "Committed imported docs on target branch $version_branch"
+}
+
+restore_git_ref() {
+  local repo_path="$1"
+  local ref="$2"
+
+  if git -C "$repo_path" show-ref --verify --quiet "refs/heads/$ref"; then
+    git -C "$repo_path" switch "$ref"
+  else
+    git -C "$repo_path" switch --detach "$ref"
+  fi
+}
+
+discover_version_source_refs() {
+  git -C "$source_dir" for-each-ref --format='%(refname)' refs/heads refs/remotes \
+    | awk -F/ '
+        $1 == "refs" && $2 == "heads" && $3 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ {
+          print $3 "\t" $0 "\t0";
+          next;
+        }
+        $1 == "refs" && $2 == "remotes" && $NF ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ {
+          print $NF "\t" $0 "\t1";
+        }
+      ' \
+    | sort -t "$(printf '\t')" -k1,1V -k3,3n \
+    | awk -F '\t' '!seen[$1]++ { print $1 "\t" $2 }'
+}
+
+discover_target_version_branches() {
+  git -C "$target_site_root" for-each-ref --format='%(refname)' refs/heads refs/remotes \
+    | awk -F/ '
+        $1 == "refs" && $2 == "heads" && $3 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ {
+          print $3 "\tlocal";
+          next;
+        }
+        $1 == "refs" && $2 == "remotes" && $NF ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ {
+          print $NF "\tremote";
+        }
+      ' \
+    | sort -t "$(printf '\t')" -k1,1V -k2,2
+}
+
+array_contains() {
+  local needle="$1"
+  shift
+  local candidate=""
+  for candidate in "$@"; do
+    if [[ "$candidate" == "$needle" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+prune_stale_target_version_branches() {
+  local original_ref="$1"
+  local stale_branch=""
+  local branch_kind=""
+
+  while IFS=$'\t' read -r stale_branch branch_kind; do
+    [[ -n "$stale_branch" ]] || continue
+    if array_contains "$stale_branch" "${version_branches[@]}"; then
+      continue
+    fi
+
+    if [[ "$branch_kind" == "local" ]]; then
+      if [[ "$original_ref" == "$stale_branch" ]]; then
+        log WARN "Skipping stale target branch deletion for currently checked out branch $stale_branch"
+        continue
+      fi
+      log INFO "Deleting stale target release branch $stale_branch"
+      git -C "$target_site_root" branch -D "$stale_branch"
+      continue
+    fi
+
+    log INFO "Deleting stale target remote-tracking release branch origin/$stale_branch"
+    git -C "$target_site_root" branch -dr "origin/$stale_branch" >/dev/null 2>&1 || true
+  done < <(discover_target_version_branches)
+}
+
+if [[ "$migrate_version_branches" -eq 1 && "$SKIP_BRANCH_VERSION_MIGRATION" -eq 0 ]]; then
+  if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log ERROR "--migrate-version-branches requires the source directory to be a git repository"
+    exit 1
+  fi
+
+  if ! git -C "$target_site_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log ERROR "--migrate-version-branches requires the target site root to be a git repository"
+    exit 1
+  fi
+
+  require_clean_git_worktree "$target_site_root"
+
+  original_target_ref="$(git -C "$target_site_root" symbolic-ref --quiet --short HEAD || git -C "$target_site_root" rev-parse HEAD)"
+  target_docs_rel_path="${target_docs_dir#"$target_site_root"/}"
+  target_static_gitbook_rel_path="${target_static_gitbook_dir#"$target_site_root"/}"
+
+  version_branches=()
+  version_source_refs=()
+  while IFS=$'\t' read -r version_branch version_source_ref; do
+    [[ -n "$version_branch" ]] || continue
+    version_branches+=("$version_branch")
+    version_source_refs+=("$version_source_ref")
+  done < <(discover_version_source_refs)
+
+  if [[ "${#version_branches[@]}" -eq 0 ]]; then
+    log WARN "No source branches matching X.Y.Z were found; skipping branch replication"
+  else
+    prune_stale_target_version_branches "$original_target_ref"
+    log INFO "Replicating source version branches into target repository branches: ${version_branches[*]}"
+
+    for index in "${!version_branches[@]}"; do
+      version_branch="${version_branches[$index]}"
+      version_source_ref="${version_source_refs[$index]}"
+      log INFO "Processing source branch $version_branch from $version_source_ref"
+      branch_export_dir="$(mktemp -d /tmp/gitbook-branch-export.XXXXXX)"
+
+      git -C "$source_dir" archive "$version_source_ref" | tar -x -C "$branch_export_dir"
+
+      if git -C "$target_site_root" show-ref --verify --quiet "refs/heads/$version_branch"; then
+        git -C "$target_site_root" switch "$version_branch"
+      else
+        git -C "$target_site_root" switch -c "$version_branch"
+      fi
+
+      import_branch_args=(--force-clean)
+      if [[ "$reset_versioned_docs" -eq 1 ]]; then
+        import_branch_args+=(--reset-versioned-docs)
+      fi
+
+      GITBOOK_IMPORT_SKIP_BRANCH_VERSION_MIGRATION=1 \
+      GITBOOK_IMPORT_SUPPRESS_VERSION_WARNINGS=1 \
+      GITBOOK_IMPORT_LOG_LEVEL="$LOG_LEVEL" \
+      bash "$0" "${import_branch_args[@]}" "$branch_export_dir" "$target_docs_dir"
+
+      commit_branch_import_if_needed \
+        "$target_site_root" \
+        "$version_branch"
+
+      rm -rf "$branch_export_dir"
+    done
+
+    restore_git_ref "$target_site_root" "$original_target_ref"
+    log INFO "Completed target branch replication for source version branches"
+  fi
 fi
 
 if find "$target_docs_dir" -mindepth 1 -maxdepth 1 | read -r _; then
@@ -162,6 +342,7 @@ export GITBOOK_IMPORT_SOURCE_DIR="$source_dir"
 export GITBOOK_IMPORT_TARGET_DOCS_DIR="$target_docs_dir"
 export GITBOOK_IMPORT_TARGET_STATIC_GITBOOK_DIR="$target_static_gitbook_dir"
 export GITBOOK_IMPORT_LOG_LEVEL="$LOG_LEVEL"
+export GITBOOK_IMPORT_ASSET_PUBLIC_PREFIX="$ASSET_PUBLIC_PREFIX"
 
 node <<'NODE'
 const fs = require("fs");
@@ -171,6 +352,7 @@ const sourceDir = process.env.GITBOOK_IMPORT_SOURCE_DIR;
 const targetDocsDir = process.env.GITBOOK_IMPORT_TARGET_DOCS_DIR;
 const targetStaticGitbookDir = process.env.GITBOOK_IMPORT_TARGET_STATIC_GITBOOK_DIR;
 const logLevel = process.env.GITBOOK_IMPORT_LOG_LEVEL || "INFO";
+const assetPublicPrefix = (process.env.GITBOOK_IMPORT_ASSET_PUBLIC_PREFIX || "/img/gitbook").replace(/\/+$/, "");
 
 if (!sourceDir || !targetDocsDir || !targetStaticGitbookDir) {
   throw new Error("Missing import environment variables.");
@@ -394,7 +576,7 @@ function isWithinDir(parentDir, childPath) {
 
 function mapGitBookAssetAbsolutePath(assetAbsolutePath, gitBookAssetsDir) {
   const relativeAssetPath = normalizePosix(path.relative(gitBookAssetsDir, assetAbsolutePath));
-  return `/img/gitbook/${relativeAssetPath}`;
+  return `${assetPublicPrefix}/${relativeAssetPath}`;
 }
 
 function extractGitBookAssetRelativePath(rawPath) {
@@ -452,7 +634,7 @@ function rewriteMarkdownLinks(content, sourceRelPath, sourceAbsolutePath, destRe
     const gitBookAssetRelativePath = extractGitBookAssetRelativePath(rawPath);
 
     if (gitBookAssetRelativePath) {
-      nextHref = `/img/gitbook/${gitBookAssetRelativePath}`;
+      nextHref = `${assetPublicPrefix}/${gitBookAssetRelativePath}`;
     } else {
       const sourceTargetAbsolutePath = resolveSourceTargetAbsolute(rawPath, sourceAbsolutePath);
       if (isWithinDir(docsRoot, sourceTargetAbsolutePath) && /\.(md|mdx|markdown)$/i.test(rawPath)) {
@@ -499,7 +681,7 @@ function rewriteHtmlAssetReferences(content, sourceAbsolutePath, destRelPath, gi
     let nextHref = null;
 
     if (gitBookAssetRelativePath) {
-      nextHref = `/img/gitbook/${gitBookAssetRelativePath}`;
+      nextHref = `${assetPublicPrefix}/${gitBookAssetRelativePath}`;
     } else {
       const sourceTargetAbsolutePath = resolveSourceTargetAbsolute(pathPart, sourceAbsolutePath);
       if (!(gitBookAssetsDir && isWithinDir(gitBookAssetsDir, sourceTargetAbsolutePath))) {
@@ -541,11 +723,7 @@ function rewriteStandaloneHref(rawPath, sourceAbsolutePath, destRelPath, gitBook
   const gitBookAssetRelativePath = extractGitBookAssetRelativePath(rawPath);
 
   if (gitBookAssetRelativePath) {
-    const mappedAssetTarget = `assets/gitbook/${gitBookAssetRelativePath}`;
-    const relativeAssetTarget = normalizePosix(
-      path.posix.relative(destDirPosix === "." ? "" : destDirPosix, mappedAssetTarget),
-    );
-    return formatRelativeAssetHref(relativeAssetTarget || mappedAssetTarget);
+    return `${assetPublicPrefix}/${gitBookAssetRelativePath}`;
   }
 
   if (/\.(md|mdx|markdown)$/i.test(rawPath)) {
@@ -915,7 +1093,7 @@ log("INFO", "Import complete", {
 });
 NODE
 
-if [[ "$reset_versioned_docs" -eq 0 ]]; then
+if [[ "$reset_versioned_docs" -eq 0 && "$SUPPRESS_VERSION_WARNINGS" -eq 0 ]]; then
   lingering_versioned_artifacts=0
   if [[ -f "$versions_file" ]]; then
     lingering_versioned_artifacts=1
