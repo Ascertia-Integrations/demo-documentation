@@ -191,8 +191,9 @@ Reference:
 1. Create a new repository from this template.
 2. Update the product-specific files listed in [What you should change](#what-you-should-change).
 3. Keep the platform contract in place as described in [What you should not change without understanding the impact](#what-you-should-not-change-without-understanding-the-impact).
-4. Add the required GitHub secret `DOCS_PLATFORM_NPM_TOKEN`.
-5. Push to `main` for current docs, and to release branches named `X.Y.Z` for versioned docs.
+4. Enable GitHub Pages for the repository in **Settings → Pages** and set the source to **GitHub Actions**.
+5. Add the required GitHub secret `DOCS_PLATFORM_NPM_TOKEN`.
+6. Push to `main` for current docs, and to release branches named `X.Y.Z` for versioned docs.
 
 ## What you should change
 
@@ -285,6 +286,21 @@ This repository already includes the required npm scope configuration in `.npmrc
 ```ini
 @ascertia-integrations:registry=https://npm.pkg.github.com
 ```
+
+Enable GitHub Pages for the repository in **Settings → Pages** and set the source to **GitHub Actions**.
+
+If a deploy from a release branch such as `2.0.6` is blocked, check **Settings → Environments → `github-pages`**. GitHub Pages custom workflows use the `github-pages` environment by default, and that environment may restrict which branches or tags are allowed to deploy.
+
+What to check:
+
+- Review **Deployment branches and tags** or any branch restriction rules on the `github-pages` environment.
+- If the environment only allows `main` or `master`, release branches named `X.Y.Z` will be blocked from deploying.
+
+Choose the behavior you want:
+
+- Deploy only from `main`: keep the environment restriction and only run the Pages deploy workflow on `main`.
+- Allow release branches to deploy: add the relevant release branch names or patterns such as `*.*.*` to the allowed branches and tags for the `github-pages` environment.
+- Use tags or releases instead of branch deploys: update the environment rule to match that release process.
 
 ## Local development
 
