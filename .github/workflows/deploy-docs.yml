@@ -5,14 +5,30 @@ on:
     branches:
       - main
       - "*.*.*"
+  delete:
 
 jobs:
   deploy:
+    if: ${{ github.event_name != 'delete' }}
     uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@main
     secrets: inherit
     with:
       # Use `npm ci` once package-lock.json is stabilized for this repo.
       install_command: npm install
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      packages: read
+
+  prune-deleted-release:
+    if: ${{ github.event_name == 'delete' && github.event.ref_type == 'branch' }}
+    uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@main
+    secrets: inherit
+    with:
+      install_command: npm install
+      release_action: prune
+      release_ref: ${{ github.event.ref }}
     permissions:
       contents: write
       pages: write
