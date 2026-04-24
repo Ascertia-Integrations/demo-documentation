@@ -1,6 +1,6 @@
-# Demo Documentation Template
+# Documentation Engine Template
 
-This repository is a **consumer documentation template** for product teams using the shared Docs Platform from `Ascertia-Integrations/docusaurus-github-pages-poc`.
+This repository is a **consumer documentation template** for product teams using the shared Documentation Engine Lib from `Ascertia-Integrations/documentation-engine-lib`.
 
 Use it as the starting point for a new documentation repository, then replace the demo branding and demo content with your own product documentation.
 
@@ -184,7 +184,7 @@ Reference:
 - Shared styling and layout through `@ascertia-integrations/docusaurus-preset-docs`
 - GitHub Pages deployment through `.github/workflows/deploy-docs.yml`
 - Automatic version syncing for release branches such as `1.2.3`
-- A working example of the files the Docs Platform expects to exist
+- A working example of the files the Documentation Engine expects to exist
 
 ## How to use this template
 
@@ -218,7 +218,7 @@ You can also remove demo-only starter assets if they are no longer used, for exa
 
 ## What you should not change without understanding the impact
 
-These files are part of the contract with the Docs Platform and should stay aligned with the shared library/workflow:
+These files are part of the contract with the Documentation Engine and should stay aligned with the shared library/workflow:
 
 - `.github/workflows/deploy-docs.yml`
   This calls the reusable deployment workflow from the platform repo. Only change the referenced workflow version intentionally when upgrading the platform.
@@ -241,7 +241,7 @@ Those files are managed by the version-sync flow and committed as build artifact
 
 ## How this repository interacts with the library
 
-This repository is the **consumer**. The `Ascertia-Integrations/docusaurus-github-pages-poc` repository is the **platform/library**.
+This repository is the **consumer**. The `Ascertia-Integrations/documentation-engine-lib` repository is the **platform/library**.
 
 The interaction points are:
 

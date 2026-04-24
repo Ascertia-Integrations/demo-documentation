@@ -1,6 +1,19 @@
 name: deploy-docs
 on:
   workflow_dispatch:
+    inputs:
+      release_action:
+        description: Pipeline mode for manual runs.
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - prune
+      release_ref:
+        description: Release version to prune when release_action=prune.
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -9,8 +22,8 @@ on:
 
 jobs:
   deploy:
-    if: ${{ github.event_name != 'delete' }}
-    uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@main
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_action != 'prune') }}
+    uses: Ascertia-Integrations/documentation-engine-lib/.github/workflows/reusable-deploy-docs.yml@main
     secrets: inherit
     with:
       # Use `npm ci` once package-lock.json is stabilized for this repo.
@@ -23,12 +36,26 @@ jobs:
 
   prune-deleted-release:
     if: ${{ github.event_name == 'delete' && github.event.ref_type == 'branch' }}
-    uses: Ascertia-Integrations/docusaurus-github-pages-poc/.github/workflows/reusable-deploy-docs.yml@main
+    uses: Ascertia-Integrations/documentation-engine-lib/.github/workflows/reusable-deploy-docs.yml@main
     secrets: inherit
     with:
       install_command: npm install
       release_action: prune
       release_ref: ${{ github.event.ref }}
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      packages: read
+
+  prune-manual-release:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_action == 'prune' }}
+    uses: Ascertia-Integrations/documentation-engine-lib/.github/workflows/reusable-deploy-docs.yml@main
+    secrets: inherit
+    with:
+      install_command: npm install
+      release_action: prune
+      release_ref: ${{ github.event.inputs.release_ref }}
     permissions:
       contents: write
       pages: write
