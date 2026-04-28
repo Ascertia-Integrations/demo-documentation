@@ -107,27 +107,285 @@ Use external URLs only for external sites. For links to another page in this doc
 
 ### Importing GitBook content
 
-If your existing docs come from a GitBook-style repository, use the importer script in this template to bootstrap the `docs/` tree.
+If your existing docs come from a GitBook-style repository, use the importer script in this template to bootstrap the `docs/` tree, then do a focused cleanup pass for any GitBook-specific formatting that should not remain in this project.
 
-Basic usage:
+#### When to use this migration flow
 
-```bash
-bash ./scripts/import-gitbook.sh ../legacy-gitbook ./docs
+Use this flow when:
+
+- the source repository is organized like a GitBook docs repo
+- the source uses `README.md`, `SUMMARY.md`, or `.gitbook/assets/`
+- you want this template to become the new home for the docs content
+- you want release branches named `X.Y.Z` to continue driving published Docusaurus versions
+
+#### Prerequisites and repo expectations
+
+- run the command from the root of this template repository
+- point `<gitbook-source-dir>` at the root of the source GitBook-style repository
+- the importer reads `.gitbook.yaml` when present and honors `root`, `structure.readme`, and `structure.summary`
+- if `.gitbook.yaml` is missing, the importer defaults to:
+  - docs root: `.`
+  - readme file: `README.md`
+  - summary file: `SUMMARY.md`
+- the source content should be Markdown or MDX based and use normal GitBook file conventions
+- for a first migration into this starter template, prefer `--force-clean --reset-versioned-docs`
+- if you plan to migrate release branches too, run `git fetch --prune` in the source repo first so the remote-tracking branch list is current
+- `--migrate-version-branches` requires a clean worktree in the target repo because the script creates or updates target release branches and commits imported content there
+
+#### What the importer handles automatically
+
+Structure and navigation:
+
+- resolves the import root from `.gitbook.yaml` `root`
+- uses `.gitbook.yaml` `structure.readme` and `structure.summary` when present
+- imports from the resolved docs root instead of assuming the repo root is the docs root
+- renames section landing pages such as `README.md`, `README.mdx`, or `README.markdown` to matching `index.*` files
+- parses `SUMMARY.md` entries into `sidebar_label`, `sidebar_position`, and generated `_category_.json` files
+- adds `slug: /` for the imported site landing page when the root `README` becomes `index.*`
+- preserves existing frontmatter fields when they already exist instead of overwriting them
+
+Links, assets, and MDX safety:
+
+- rewrites relative Markdown links between imported docs into project-relative doc links
+- rewrites Markdown links and image references that point at `.gitbook/assets/...`
+- rewrites HTML `src` references on tags such as `<img>` and `<source>` when they point at GitBook-managed assets
+- copies `.gitbook/assets/` into `static/img/gitbook/`
+- copies non-Markdown files found under the resolved docs root alongside the imported docs
+- normalizes void HTML tags such as `<img>`, `<source>`, `<br>`, and `<hr>` into MDX-safe self-closing tags
+
+GitBook block translation:
+
+- converts GitBook hint blocks into Docusaurus admonitions
+- uses this style mapping:
+  - `info -> info`
+  - `success -> tip`
+  - `warning -> warning`
+  - `danger -> danger`
+- converts GitBook `{% content-ref url="..." %}` blocks into normal Markdown links
+
+Cleanup and versioning support:
+
+- skips control and hidden paths such as `SUMMARY.md`, `book.json`, and dot-prefixed content under the docs root
+- optionally removes stale `versions.json`, `versioned_docs/`, and `versioned_sidebars/` with `--reset-versioned-docs`
+- optionally migrates source release branches named `X.Y.Z` into matching target repo branches with `--migrate-version-branches`
+- prunes stale target release branches that are no longer present in the source release branch set
+- creates one local commit per migrated release branch import
+- logs resolved paths, rewritten links, generated categories, skipped control files, copied assets, and import totals
+
+Release-version follow-up handled by version sync:
+
+- when release docs are later generated with `docusaurus-sync-version`, the version-sync pipeline rewrites `/img/gitbook/...` image references inside versioned docs into local MDX imports
+- this means the GitBook asset copy under `static/img/gitbook/` is used during import, and the versioned output is later normalized again for Docusaurus versioned docs
+
+#### What still needs manual translation
+
+The importer handles the structural conversion, but you should still review the migrated content for GitBook-specific patterns that need a project-native Docusaurus equivalent.
+
+Callouts and notices:
+
+GitBook style:
+
+```md
+{% hint style="warning" %}
+Review this setting before you upgrade.
+{% endhint %}
 ```
 
-Replace existing `docs/` content first:
+This project style:
 
-```bash
-bash ./scripts/import-gitbook.sh --force-clean ../legacy-gitbook ./docs
+```mdx
+:::warning
+Review this setting before you upgrade.
+:::
 ```
 
-Replace existing `docs/` content and clear stale starter/versioned artifacts:
+Content references:
+
+GitBook style:
+
+```md
+{% content-ref url="getting-started/README.md" %}
+[Getting started](getting-started/README.md)
+{% endcontent-ref %}
+```
+
+This project style:
+
+```mdx
+[Getting started](./getting-started/index.mdx)
+```
+
+Section landing pages:
+
+GitBook style:
+
+```text
+getting-started/
+  README.md
+  install.md
+```
+
+This project style:
+
+```text
+docs/
+  getting-started/
+    index.mdx
+    install.mdx
+```
+
+Navigation ordering:
+
+GitBook style:
+
+```md
+* [Getting started](getting-started/README.md)
+  * [Install](getting-started/install.md)
+```
+
+This project style:
+
+```mdx
+---
+sidebar_position: 1
+---
+```
+
+```json
+{
+  "label": "Getting Started",
+  "position": 1
+}
+```
+
+Shared uploaded images:
+
+GitBook style:
+
+```md
+![Architecture](.gitbook/assets/architecture.png)
+```
+
+This project style:
+
+```mdx
+![Architecture](/img/gitbook/architecture.png)
+```
+
+If the image should become a long-term shared site asset, move it into `static/img/` and update the reference to its final path there.
+
+Page-local images:
+
+GitBook style:
+
+```md
+![Step screenshot](../.gitbook/assets/install-step.png)
+```
+
+This project style:
+
+```mdx
+![Step screenshot](./assets/install-step.png)
+```
+
+Use a nearby `assets/` folder when the image only belongs to one page or one small section.
+
+Collapsible sections:
+
+GitBook style:
+
+```md
+<details>
+<summary>Advanced setup</summary>
+
+Extra steps
+</details>
+```
+
+This project style:
+
+```mdx
+<details>
+  <summary>Advanced setup</summary>
+
+  Extra steps
+</details>
+```
+
+Grouped or tabbed content:
+
+GitBook style:
+
+```md
+{% tabs %}
+{% tab title="Cloud" %}
+Cloud steps
+{% endtab %}
+{% tab title="Self-hosted" %}
+Self-hosted steps
+{% endtab %}
+{% endtabs %}
+```
+
+This project style:
+
+```mdx
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs>
+  <TabItem value="cloud" label="Cloud" default>
+    Cloud steps
+  </TabItem>
+  <TabItem value="self-hosted" label="Self-hosted">
+    Self-hosted steps
+  </TabItem>
+</Tabs>
+```
+
+Embeds and raw HTML:
+
+GitBook style:
+
+```md
+{% embed url="https://example.com/demo" %}
+```
+
+This project style:
+
+```mdx
+<iframe
+  src="https://example.com/demo"
+  title="Demo"
+  width="100%"
+  height="480"
+  loading="lazy"
+/>
+```
+
+If an embed does not render cleanly in MDX, replace it with a normal link, screenshot, or a project-specific React component instead of keeping unsupported GitBook syntax.
+
+#### Command recipes by migration scenario
+
+First import into the starter template:
 
 ```bash
 bash ./scripts/import-gitbook.sh --force-clean --reset-versioned-docs ../legacy-gitbook ./docs
 ```
 
-Enable detailed debug logs during the import:
+Replace starter `docs/` content but leave versioned artifacts alone:
+
+```bash
+bash ./scripts/import-gitbook.sh --force-clean ../legacy-gitbook ./docs
+```
+
+Replace starter `docs/` content and clear stale versioned artifacts:
+
+```bash
+bash ./scripts/import-gitbook.sh --force-clean --reset-versioned-docs ../legacy-gitbook ./docs
+```
+
+Enable detailed debug logging during the import:
 
 ```bash
 bash ./scripts/import-gitbook.sh --verbose --force-clean ../legacy-gitbook ./docs
@@ -139,38 +397,52 @@ Reduce output to warnings and errors only:
 bash ./scripts/import-gitbook.sh --quiet --force-clean ../legacy-gitbook ./docs
 ```
 
-Import current docs and local release branches named `X.Y.Z` into matching target repository branches:
+Import current docs and matching release branches named `X.Y.Z`:
 
 ```bash
 bash ./scripts/import-gitbook.sh --force-clean --reset-versioned-docs --migrate-version-branches ../legacy-gitbook ./docs
 ```
 
-What the importer handles:
+Practical rule: for a first migration into this starter template, usually start with `--force-clean --reset-versioned-docs`. Add `--migrate-version-branches` only when the source repository also uses release branches named `X.Y.Z`.
 
-- `.gitbook.yaml` `root`, `readme`, and `summary` settings
-- GitBook-managed uploaded images from `.gitbook/assets/`, copied into `static/img/gitbook/`
-- `README.md` or `README.mdx` section landing pages, converted to `index.md` or `index.mdx`
-- `SUMMARY.md` ordering and labels, converted into Docusaurus sidebar metadata
-- optional cleanup of stale `versions.json`, `versioned_docs/`, and `versioned_sidebars/`
-- optional migration of source git branches named `X.Y.Z` into matching target repo branches with one local commit per branch
-- automatic pruning of stale target release branches that are not present in the source release branch set
-- relative Markdown links between imported docs
-- rewritten Markdown image and link references that point at `.gitbook/assets/...`
-- copied assets alongside the imported content
+#### Version-branch behavior
 
-What the logs show:
+When `--migrate-version-branches` is enabled:
 
-- resolved source and destination paths
-- detected GitBook config and summary file handling
-- skipped control files such as `SUMMARY.md`
-- warnings if stale versioned docs artifacts still exist after import
-- copied assets and imported documents
-- rewritten internal links
-- applied or skipped frontmatter fields
-- generated `_category_.json` files
-- final import counts
+- only source branches that match `X.Y.Z` are treated as release branches
+- the script checks both local and remote-tracking source branches and prefers a local branch when both exist
+- stale target release branches that are no longer present in the source release branch set are pruned automatically
+- each imported release branch is created or updated in an isolated worktree and committed locally
+- the current-docs import also runs in an isolated worktree so your checked-out branch stays clean after the run
+- if the target repository has uncommitted changes, branch migration stops before making branch updates
 
-Practical rule: for a first migration into a starter Docusaurus repo, prefer `--force-clean --reset-versioned-docs` so old starter pages do not keep showing through versioned artifacts. Add `--migrate-version-branches` if the source repo also has release branches you want replicated into matching target repo branches in the same run. That mode checks both local and remote-tracking source branches named `X.Y.Z`, prefers a local branch when both exist, prunes stale target release branches that are no longer present in the source set, uses temporary git worktrees to create or update release branches and commit them locally, and runs the current-docs import in an isolated worktree so your checked-out branch stays clean after the run. If you need the latest remote branch list, run `git fetch --prune` in the source repo first. After that, review the generated docs for any GitBook-specific embeds or formatting that still need manual cleanup.
+#### Post-import validation checklist
+
+After the import completes, confirm that:
+
+- the migrated docs landed under `docs/`
+- root landing pages became `index.*`
+- sidebar order and labels look correct in the generated site
+- `_category_.json` files were generated where you expect section categories
+- GitBook-managed uploads now exist under `static/img/gitbook/`
+- imported links and images render correctly in Docusaurus
+- stale `versions.json`, `versioned_docs/`, and `versioned_sidebars/` were removed when you used `--reset-versioned-docs`
+- any leftover GitBook-specific embeds, tab syntax, or raw HTML were cleaned up manually
+
+#### Troubleshooting and common pitfalls
+
+- Old starter pages still show up after import:
+  Re-run with `--force-clean --reset-versioned-docs`.
+- A release branch was not migrated:
+  Make sure the source branch name matches `X.Y.Z` exactly, then run `git fetch --prune` in the source repo and try again.
+- Branch migration aborts because the worktree is dirty:
+  Commit or stash changes in the target repo before using `--migrate-version-branches`.
+- An image looks wrong in versioned docs:
+  Confirm the source asset was imported into `static/img/gitbook/`; version sync expects those files to exist when it rewrites release docs.
+- A GitBook block is still present after import:
+  The importer only rewrites supported patterns. Use the translation examples above for the remaining manual cleanup pass.
+- Hidden dot-path content did not import:
+  The importer skips hidden files and directories under the docs root by design.
 
 Reference:
 
